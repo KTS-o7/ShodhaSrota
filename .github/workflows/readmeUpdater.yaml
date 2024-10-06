@@ -7,32 +7,23 @@ on:
 
 jobs:
   update-readme:
-    name: Update README with directory tables
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      - name: Set up Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: "3.x"
-
-      - name: Install dependencies
+      - name: Update README
         run: |
-          python -m pip install --upgrade pip
-
-      - name: Run updateReadme.py
-        run: |
-          python updateReadme.py
-
-      - name: Commit and push changes
-        run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          echo "Updating README..."
+          # Add your commands to update the README here
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
           git add README.md
           git commit -m "Update README with directory tables"
-          git push
+
+      - name: Push changes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git push
