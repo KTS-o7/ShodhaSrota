@@ -21,14 +21,10 @@ jobs:
           git config --global user.name "github-actions[bot]"
           python updateReadme.py
           git add README.md
-          git commit -m "Update README with directory tables"
+          git commit -m "Update README with directory tables" || echo "No changes to commit"
 
       - name: Push changes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if ! git diff-index --quiet HEAD --; then
-            git push
-          else
-            echo "No changes to commit"
-          fi
+          git push || echo "No changes to push"
