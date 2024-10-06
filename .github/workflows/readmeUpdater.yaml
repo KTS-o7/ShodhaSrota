@@ -19,7 +19,7 @@ jobs:
           # Add your commands to update the README here
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
-          python run update_readme.py
+          python updateReadme.py
           git add README.md
           git commit -m "Update README with directory tables"
 
@@ -28,7 +28,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if ! git diff-index --quiet HEAD --; then
-            git commit -m "Update README with directory tables"
+            git push
           else
             echo "No changes to commit"
           fi
