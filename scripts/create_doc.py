@@ -3,274 +3,355 @@ from __future__ import annotations
 import argparse
 import re
 import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from scripts.utils import (
+    ConfigError,
+    ValidationError,
     format_inline_yaml_list,
     get_default_config,
     get_repo_root,
     load_config,
     normalize_category,
     normalize_list_input,
+    validate_config,
 )
 
 
-def parse_args(params: dict[str, Any]) -> dict[str, Any]:
+class GitError(Exception):
+    """Raised when git operations fail."""
+
+    pass
+
+
+def parse_args() -> argparse.Namespace:
+    """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="Create a new ShodhaSrota document.")
-    parser.add_argument("--category", help="Category name (research, math, technologies, general, books).")
+    parser.add_argument(
+        "--category",
+        help="Category name (research, math, technologies, general, books).",
+    )
     parser.add_argument("--title", help="Title of the document.")
     parser.add_argument("--author", help="Author name.")
     parser.add_argument("--tags", help="Comma-separated tags.")
     parser.add_argument("--links", help="Comma-separated related links.")
-    parser.add_argument("--auto-commit", action="store_true", help="Enable auto-commit.")
-    parser.add_argument("--no-auto-commit", action="store_true", help="Disable auto-commit.")
+    parser.add_argument(
+        "--auto-commit", action="store_true", help="Enable auto-commit."
+    )
+    parser.add_argument(
+        "--no-auto-commit", action="store_true", help="Disable auto-commit."
+    )
     parser.add_argument("--auto-push", action="store_true", help="Enable auto-push.")
     parser.add_argument("--config", help="Path to config YAML.")
-    args = parser.parse_args(params.get("argv"))
-    return {"args": args}
+    return parser.parse_args()
 
 
-def prompt_for_value(params: dict[str, Any]) -> dict[str, Any]:
-    raw_value = params.get("raw_value")
-    prompt_text = params["prompt_text"]
-    default_value = params.get("default_value")
-    is_required = params.get("is_required", False)
-    if raw_value:
-        return {"value": str(raw_value).strip()}
+def prompt_for_value(
+    prompt_text: str,
+    raw_value: str | None = None,
+    default_value: str | None = None,
+    is_required: bool = False,
+) -> str:
+    """
+    Prompt user for a value if not provided.
+
+    Args:
+        prompt_text: Text to display in prompt
+        raw_value: Value from command line (if any)
+        default_value: Default value if nothing provided
+        is_required: Whether value is required
+
+    Returns:
+        The final value (from raw_value, user input, or default)
+    """
+    # If raw_value is provided (even if empty string), use it
+    if raw_value is not None:
+        return raw_value.strip()
+
+    # Interactive prompt
     while True:
         default_hint = f" [{default_value}]" if default_value else ""
         user_input = input(f"{prompt_text}{default_hint}: ").strip()
+
         if user_input:
-            return {"value": user_input}
+            return user_input
+
         if default_value is not None:
-            return {"value": str(default_value)}
+            return str(default_value)
+
         if is_required:
             print("Value is required.")
             continue
-        return {"value": ""}
+
+        return ""
 
 
-def sanitize_title(params: dict[str, Any]) -> dict[str, Any]:
-    raw_title = params["raw_title"]
+def sanitize_title(raw_title: str) -> str:
+    """
+    Sanitize title for use in filename.
+
+    - Converts to lowercase
+    - Replaces non-alphanumeric chars with underscores
+    - Collapses multiple underscores
+    - Returns 'untitled' if empty
+    """
+    if not raw_title or not raw_title.strip():
+        return "untitled"
+
     normalized_title = raw_title.strip().lower()
     sanitized_title = re.sub(r"[^a-z0-9]+", "_", normalized_title)
     sanitized_title = re.sub(r"_+", "_", sanitized_title).strip("_")
-    if sanitized_title:
-        return {"sanitized_title": sanitized_title}
-    return {"sanitized_title": "untitled"}
+
+    return sanitized_title if sanitized_title else "untitled"
 
 
-def render_template(params: dict[str, Any]) -> dict[str, Any]:
-    template_text = params["template_text"]
-    replacements = params["replacements"]
+def render_template(template_text: str, replacements: dict[str, str]) -> str:
+    """Render template by replacing placeholders."""
     rendered_text = template_text
     for placeholder, value in replacements.items():
         rendered_text = rendered_text.replace(placeholder, value)
-    return {"rendered_text": rendered_text}
+    return rendered_text
 
 
-def ensure_directory(params: dict[str, Any]) -> dict[str, Any]:
-    target_dir = params["target_dir"]
-    target_dir.mkdir(parents=True, exist_ok=True)
-    return {"target_dir": target_dir}
+def run_git_command(
+    command: list[str], working_dir: Path
+) -> subprocess.CompletedProcess:
+    """
+    Run a git command and return the result.
 
-
-def run_git_command(params: dict[str, Any]) -> dict[str, Any]:
-    command = params["command"]
-    working_dir = params["working_dir"]
+    Raises:
+        GitError: If command fails
+    """
     result = subprocess.run(
         command, cwd=working_dir, capture_output=True, text=True, check=False
     )
-    return {"result": result}
+
+    if result.returncode != 0:
+        raise GitError(f"Git command failed: {' '.join(command)}\n{result.stderr}")
+
+    return result
 
 
-def should_auto_commit(params: dict[str, Any]) -> dict[str, Any]:
-    args = params["args"]
-    config_defaults = params["config_defaults"]
-    if args.no_auto_commit:
-        return {"auto_commit": False}
-    if args.auto_commit:
-        return {"auto_commit": True}
-    return {"auto_commit": bool(config_defaults.get("auto_commit", True))}
+def is_git_repo(repo_root: Path) -> bool:
+    """Check if directory is a git repository."""
+    try:
+        run_git_command(["git", "rev-parse", "--is-inside-work-tree"], repo_root)
+        return True
+    except GitError:
+        return False
 
 
-def is_git_repo(params: dict[str, Any]) -> dict[str, Any]:
-    repo_root = params["repo_root"]
-    result = run_git_command(
-        {"command": ["git", "rev-parse", "--is-inside-work-tree"], "working_dir": repo_root}
-    )["result"]
-    return {"is_git_repo": result.returncode == 0}
+def auto_commit_file(repo_root: Path, file_path: Path, commit_message: str) -> None:
+    """
+    Commit a file to git.
+
+    Raises:
+        GitError: If git operations fail
+    """
+    run_git_command(["git", "add", str(file_path)], repo_root)
+    run_git_command(["git", "commit", "-m", commit_message], repo_root)
 
 
-def auto_commit_file(params: dict[str, Any]) -> dict[str, Any]:
-    repo_root = params["repo_root"]
-    file_path = params["file_path"]
-    commit_message = params["commit_message"]
-    add_result = run_git_command(
-        {"command": ["git", "add", str(file_path)], "working_dir": repo_root}
-    )["result"]
-    if add_result.returncode != 0:
-        print(add_result.stderr.strip())
-        return {"commit_result": add_result}
-    commit_result = run_git_command(
-        {"command": ["git", "commit", "-m", commit_message], "working_dir": repo_root}
-    )["result"]
-    if commit_result.returncode != 0:
-        print(commit_result.stderr.strip())
-    return {"commit_result": commit_result}
+def auto_push(repo_root: Path) -> None:
+    """
+    Push current branch to origin.
+
+    Raises:
+        GitError: If push fails
+    """
+    # Get current branch name
+    result = run_git_command(["git", "rev-parse", "--abbrev-ref", "HEAD"], repo_root)
+    branch_name = result.stdout.strip()
+
+    # Push to origin
+    run_git_command(["git", "push", "-u", "origin", branch_name], repo_root)
 
 
-def auto_push(params: dict[str, Any]) -> dict[str, Any]:
-    repo_root = params["repo_root"]
-    branch_result = run_git_command(
-        {"command": ["git", "rev-parse", "--abbrev-ref", "HEAD"], "working_dir": repo_root}
-    )["result"]
-    if branch_result.returncode != 0:
-        print(branch_result.stderr.strip())
-        return {"push_result": branch_result}
-    branch_name = branch_result.stdout.strip()
-    push_result = run_git_command(
-        {"command": ["git", "push", "-u", "origin", branch_name], "working_dir": repo_root}
-    )["result"]
-    if push_result.returncode != 0:
-        print(push_result.stderr.strip())
-    return {"push_result": push_result}
+def build_frontmatter_replacements(
+    title: str, author: str, created_on: str, tags: list[str], links: list[str]
+) -> dict[str, str]:
+    """Build replacement dict for template rendering."""
+    tags_yaml = format_inline_yaml_list(tags)
+    links_yaml = format_inline_yaml_list(links)
 
-
-def build_frontmatter_replacements(params: dict[str, Any]) -> dict[str, Any]:
-    title = params["title"]
-    author = params["author"]
-    created_on = params["created_on"]
-    tags = params["tags"]
-    links = params["links"]
-    tags_yaml = format_inline_yaml_list({"items": tags})["yaml_list"]
-    links_yaml = format_inline_yaml_list({"items": links})["yaml_list"]
-    replacements = {
+    return {
         "{{title}}": title,
         "{{author}}": author,
         "{{date}}": created_on,
         "{{tags}}": tags_yaml,
         "{{links}}": links_yaml,
     }
-    return {"replacements": replacements}
 
 
-def create_document(params: dict[str, Any]) -> dict[str, Any]:
-    repo_root = params["repo_root"]
-    category_dir = params["category_dir"]
-    template_path = params["template_path"]
-    file_name = params["file_name"]
-    replacements = params["replacements"]
+def create_document(
+    repo_root: Path,
+    category_dir: str,
+    template_path: Path,
+    file_name: str,
+    replacements: dict[str, str],
+) -> Path:
+    """
+    Create a new document from template.
+
+    Returns:
+        Path to created document
+
+    Raises:
+        FileExistsError: If document already exists
+        ValidationError: If template doesn't exist
+    """
     target_dir = repo_root / category_dir
-    ensure_directory({"target_dir": target_dir})
+    target_dir.mkdir(parents=True, exist_ok=True)
+
     document_path = target_dir / file_name
+
     if document_path.exists():
         raise FileExistsError(f"File already exists: {document_path}")
+
+    # Load template or use default
     if template_path.exists():
         template_text = template_path.read_text(encoding="utf-8")
     else:
+        # Default template if file not found
         template_text = (
             "---\n"
-            "title: \"{{title}}\"\n"
-            "author: \"{{author}}\"\n"
-            "date: \"{{date}}\"\n"
+            'title: "{{title}}"\n'
+            'author: "{{author}}"\n'
+            'date: "{{date}}"\n'
             "tags: {{tags}}\n"
             "links: {{links}}\n"
             "---\n\n"
             "# {{title}}\n"
         )
-    rendered_text = render_template(
-        {"template_text": template_text, "replacements": replacements}
-    )["rendered_text"]
+
+    rendered_text = render_template(template_text, replacements)
     document_path.write_text(rendered_text, encoding="utf-8")
-    return {"document_path": document_path}
+
+    return document_path
+
+
+def should_auto_commit(
+    args: argparse.Namespace, config_defaults: dict[str, Any]
+) -> bool:
+    """Determine if auto-commit should be enabled based on args and config."""
+    if args.no_auto_commit:
+        return False
+    if args.auto_commit:
+        return True
+    return bool(config_defaults.get("auto_commit", True))
 
 
 def main() -> None:
-    repo_root = get_repo_root({"script_path": Path(__file__)})["repo_root"]
-    default_config = get_default_config({})["default_config"]
-    args = parse_args({})["args"]
-    config_path = Path(args.config) if args.config else repo_root / "config.yaml"
-    config = load_config(
-        {"config_path": config_path, "default_config": default_config}
-    )["config"]
-    categories = config["paths"]["categories"]
-    category_input = prompt_for_value(
-        {
-            "raw_value": args.category,
-            "prompt_text": f"Category ({'/'.join(categories.values())})",
-            "is_required": True,
-        }
-    )["value"]
-    normalized_category = normalize_category(
-        {"category_input": category_input, "categories": categories}
-    )
-    while not normalized_category["category_key"]:
+    """Main entry point for create_doc script."""
+    try:
+        repo_root = get_repo_root(Path(__file__))
+        default_config = get_default_config()
+        args = parse_args()
+
+        # Load configuration
+        config_path = Path(args.config) if args.config else repo_root / "config.yaml"
+        config = load_config(config_path, default_config)
+
+        # Validate config
+        try:
+            validate_config(config, repo_root)
+        except ConfigError as e:
+            print(f"Warning: {e}")
+
+        categories = config["paths"]["categories"]
+
+        # Get category
         category_input = prompt_for_value(
-            {
-                "raw_value": "",
-                "prompt_text": f"Category ({'/'.join(categories.values())})",
-                "is_required": True,
-            }
-        )["value"]
-        normalized_category = normalize_category(
-            {"category_input": category_input, "categories": categories}
+            f"Category ({'/'.join(categories.values())})",
+            raw_value=args.category,
+            is_required=True,
         )
-    title = prompt_for_value(
-        {"raw_value": args.title, "prompt_text": "Title", "is_required": True}
-    )["value"]
-    author = prompt_for_value(
-        {
-            "raw_value": args.author,
-            "prompt_text": "Author",
-            "default_value": config["defaults"]["author_name"],
-        }
-    )["value"]
-    tags_value = prompt_for_value(
-        {"raw_value": args.tags, "prompt_text": "Tags (comma-separated)"}
-    )["value"]
-    links_value = prompt_for_value(
-        {"raw_value": args.links, "prompt_text": "Related links (comma-separated)"}
-    )["value"]
-    tags = normalize_list_input({"raw_value": tags_value})["items"]
-    links = normalize_list_input({"raw_value": links_value})["items"]
-    timestamp = datetime.now().strftime(config["defaults"]["timestamp_format"])
-    sanitized_title = sanitize_title({"raw_title": title})["sanitized_title"]
-    file_name = f"{sanitized_title}_{timestamp}.md"
-    template_path = repo_root / config["templates"][normalized_category["category_key"]]
-    replacements = build_frontmatter_replacements(
-        {"title": title, "author": author, "created_on": timestamp, "tags": tags, "links": links}
-    )["replacements"]
-    document_path = create_document(
-        {
-            "repo_root": repo_root,
-            "category_dir": normalized_category["category_dir"],
-            "template_path": template_path,
-            "file_name": file_name,
-            "replacements": replacements,
-        }
-    )["document_path"]
-    auto_commit = should_auto_commit(
-        {"args": args, "config_defaults": config["defaults"]}
-    )["auto_commit"]
-    auto_push_enabled = bool(args.auto_push or config["defaults"].get("auto_push", False))
-    if auto_commit:
-        if is_git_repo({"repo_root": repo_root})["is_git_repo"]:
-            commit_message = f"docs({normalized_category['category_key']}): Add {title}"
-            auto_commit_file(
-                {
-                    "repo_root": repo_root,
-                    "file_path": document_path,
-                    "commit_message": commit_message,
-                }
+
+        category_key, category_dir = normalize_category(category_input, categories)
+
+        while not category_key:
+            print(f"Invalid category. Choose from: {', '.join(categories.values())}")
+            category_input = prompt_for_value(
+                f"Category ({'/'.join(categories.values())})", is_required=True
             )
-            if auto_push_enabled:
-                auto_push({"repo_root": repo_root})
-        else:
-            print("Skipping git commit because repository is not initialized.")
-    print(f"Document created: {document_path}")
+            category_key, category_dir = normalize_category(category_input, categories)
+
+        # Get other metadata
+        title = prompt_for_value("Title", raw_value=args.title, is_required=True)
+
+        author = prompt_for_value(
+            "Author",
+            raw_value=args.author,
+            default_value=config["defaults"]["author_name"],
+        )
+
+        tags_value = prompt_for_value("Tags (comma-separated)", raw_value=args.tags)
+        links_value = prompt_for_value(
+            "Related links (comma-separated)", raw_value=args.links
+        )
+
+        tags = normalize_list_input(tags_value)
+        links = normalize_list_input(links_value)
+
+        # Generate filename
+        timestamp = datetime.now().strftime(config["defaults"]["timestamp_format"])
+        sanitized_title_str = sanitize_title(title)
+        file_name = f"{sanitized_title_str}_{timestamp}.md"
+
+        # Get template path
+        template_path = repo_root / config["templates"][category_key]
+
+        # Build replacements
+        replacements = build_frontmatter_replacements(
+            title=title, author=author, created_on=timestamp, tags=tags, links=links
+        )
+
+        # Create document
+        document_path = create_document(
+            repo_root=repo_root,
+            category_dir=category_dir,
+            template_path=template_path,
+            file_name=file_name,
+            replacements=replacements,
+        )
+
+        print(f"Document created: {document_path}")
+
+        # Handle git operations
+        auto_commit_enabled = should_auto_commit(args, config["defaults"])
+        auto_push_enabled = bool(
+            args.auto_push or config["defaults"].get("auto_push", False)
+        )
+
+        if auto_commit_enabled:
+            if not is_git_repo(repo_root):
+                print("Skipping git commit: not a git repository.")
+                return
+
+            try:
+                commit_message = f"docs({category_key}): Add {title}"
+                auto_commit_file(repo_root, document_path, commit_message)
+                print(f"Committed: {commit_message}")
+
+                if auto_push_enabled:
+                    auto_push(repo_root)
+                    print("Pushed to origin.")
+            except GitError as e:
+                print(f"Git operation failed: {e}", file=sys.stderr)
+                sys.exit(1)
+
+    except (ValidationError, ConfigError) as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    except FileExistsError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("\nAborted.")
+        sys.exit(130)
 
 
 if __name__ == "__main__":
