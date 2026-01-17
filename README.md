@@ -30,5 +30,5 @@ A project to document learning and sources.
 
 ## Books
 
-| Title | Author | Related Links |
-| ----- | ------ | ------------- |
+| File | Title | Author | Created On | Tags | Related Links |
+|------|-------|--------|------------|------|---------------|
