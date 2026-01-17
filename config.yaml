@@ -1,0 +1,22 @@
+defaults:
+  author_name: "Your Name"
+  auto_commit: true
+  auto_push: false
+  timestamp_format: "%Y-%m-%d_%H-%M-%S"
+readme:
+  title: "ShodhaSrota"
+  description: "A project to document learning and sources."
+paths:
+  base_dir: "."
+  categories:
+    research: "Research"
+    math: "Math"
+    technologies: "Technologies"
+    general: "General"
+    books: "Books"
+templates:
+  research: "scripts/templates/research.md"
+  math: "scripts/templates/math.md"
+  technologies: "scripts/templates/technologies.md"
+  general: "scripts/templates/general.md"
+  books: "scripts/templates/books.md"
