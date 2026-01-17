@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from scripts.queue import QueueItem, parse_queue, parse_queue_item
+from scripts.queue import QueueItem, append_to_queue, parse_queue, parse_queue_item
 
 
 def test_parse_empty_queue(tmp_path):
@@ -150,3 +150,53 @@ def test_parse_nonexistent_queue():
     assert result["pending"] == []
     assert result["in_progress"] == []
     assert result["completed"] == []
+
+
+def test_append_to_queue(tmp_path):
+    """Test appending new item to pending section."""
+    queue_file = tmp_path / "queue.md"
+    queue_file.write_text("""# Queue
+## Pending
+## In Progress
+## Completed
+""")
+
+    item = QueueItem(
+        timestamp="2024-01-17 15:00",
+        category="Paper",
+        title="New Paper",
+        url="https://example.com",
+    )
+
+    append_to_queue(queue_file, item)
+
+    result = parse_queue(queue_file)
+    assert len(result["pending"]) == 1
+    assert result["pending"][0].title == "New Paper"
+
+
+def test_move_item_to_in_progress(tmp_path):
+    """Test moving item from pending to in progress."""
+    queue_file = tmp_path / "queue.md"
+    queue_file.write_text("""# Queue
+## Pending
+- [ ] [2024-01-17 10:30] Paper: Test Paper - https://example.com
+
+## In Progress
+## Completed
+""")
+
+    from scripts.queue import move_queue_item
+
+    move_queue_item(
+        queue_file,
+        from_section="pending",
+        to_section="in_progress",
+        item_index=0,
+        file_path="Research/test_2024-01-17.md",
+    )
+
+    result = parse_queue(queue_file)
+    assert len(result["pending"]) == 0
+    assert len(result["in_progress"]) == 1
+    assert "Research/test_2024-01-17.md" in result["in_progress"][0].file_path

@@ -111,3 +111,100 @@ def parse_queue(queue_file: Path) -> dict[str, list[QueueItem]]:
                 result[current_section].append(item)
 
     return result
+
+
+def append_to_queue(queue_file: Path, item: QueueItem) -> None:
+    """Append new item to Pending section of queue."""
+    content = queue_file.read_text(encoding="utf-8")
+    lines = content.split("\n")
+
+    # Find ## Pending section
+    pending_idx = None
+    next_section_idx = None
+
+    for i, line in enumerate(lines):
+        if line.strip() == "## Pending":
+            pending_idx = i
+        elif pending_idx is not None and line.strip().startswith("## "):
+            next_section_idx = i
+            break
+
+    if pending_idx is None:
+        raise ValueError("Queue file missing ## Pending section")
+
+    # Insert item after Pending header
+    insert_idx = next_section_idx if next_section_idx else len(lines)
+
+    # Skip comment lines after Pending
+    while insert_idx > pending_idx + 1 and lines[insert_idx - 1].strip().startswith(
+        "<!--"
+    ):
+        insert_idx -= 1
+
+    lines.insert(insert_idx, item.to_markdown("pending"))
+
+    queue_file.write_text("\n".join(lines), encoding="utf-8")
+
+
+def write_queue(queue_file: Path, data: dict[str, list[QueueItem]]) -> None:
+    """Write structured queue data back to file."""
+    sections = [
+        "# Documentation Queue",
+        "",
+        "Track ideas captured from mobile and their progress through the writing workflow.",
+        "",
+        "## Pending",
+        "<!-- New ideas appear here -->",
+    ]
+
+    for item in data["pending"]:
+        sections.append(item.to_markdown("pending"))
+
+    sections.extend(
+        [
+            "",
+            "## In Progress",
+            "<!-- Items being actively worked on -->",
+        ]
+    )
+
+    for item in data["in_progress"]:
+        sections.append(item.to_markdown("in_progress"))
+
+    sections.extend(
+        [
+            "",
+            "## Completed",
+            "<!-- Finished documents with links -->",
+        ]
+    )
+
+    for item in data["completed"]:
+        sections.append(item.to_markdown("completed"))
+
+    sections.append("")  # Trailing newline
+
+    queue_file.write_text("\n".join(sections), encoding="utf-8")
+
+
+def move_queue_item(
+    queue_file: Path,
+    from_section: str,
+    to_section: str,
+    item_index: int,
+    file_path: str = "",
+) -> None:
+    """Move item between queue sections."""
+    data = parse_queue(queue_file)
+
+    if item_index >= len(data[from_section]):
+        raise IndexError(f"Item index {item_index} out of range")
+
+    item = data[from_section].pop(item_index)
+
+    if file_path:
+        item.file_path = file_path
+
+    data[to_section].append(item)
+
+    write_queue(queue_file, data)
