@@ -28,7 +28,8 @@ workflow:
   # AI draft generation settings
   ai_drafts:
     enabled: true
-    schedule: "0 20 * * 0" # Cron: Sunday 8 PM UTC
+    # API keys required: Set GROQ_API_KEY and EXA_API_KEY in GitHub Secrets
+    schedule: "0 20 * * 0" # Cron: Sunday 8 PM UTC (min hour day month weekday)
 
     # Model configuration
     groq:
