@@ -2,6 +2,8 @@
 
 import os
 
+import pytest
+
 from scripts.groq_client import GroqClient
 
 
@@ -14,6 +16,15 @@ def test_groq_client_initialization():
         max_tokens=4096,
     )
     assert client.model == "llama-3.3-70b-versatile"
+
+
+def test_groq_client_empty_api_key():
+    """Test that empty API key raises ValueError."""
+    with pytest.raises(ValueError, match="API key cannot be empty"):
+        GroqClient(api_key="", model="llama-3.3-70b-versatile")
+
+    with pytest.raises(ValueError, match="API key cannot be empty"):
+        GroqClient(api_key="   ", model="llama-3.3-70b-versatile")
 
 
 def test_generate_search_queries_structure():

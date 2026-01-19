@@ -22,6 +22,9 @@ class GroqClient:
         max_tokens: int = 4096,
     ):
         """Initialize GROQ client."""
+        if not api_key or not api_key.strip():
+            raise ValueError("GROQ API key cannot be empty")
+
         self.client = Groq(api_key=api_key)
         self.model = model
         self.temperature = temperature
@@ -32,15 +35,20 @@ class GroqClient:
         messages: list[dict[str, str]],
         max_tokens: int | None = None,
         temperature: float | None = None,
+        use_json_mode: bool = False,
     ) -> str:
         """Make API call to GROQ."""
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=temperature or self.temperature,
-                max_tokens=max_tokens or self.max_tokens,
-            )
+            kwargs = {
+                "model": self.model,
+                "messages": messages,
+                "temperature": temperature or self.temperature,
+                "max_tokens": max_tokens or self.max_tokens,
+            }
+            if use_json_mode:
+                kwargs["response_format"] = {"type": "json_object"}
+
+            response = self.client.chat.completions.create(**kwargs)
             return response.choices[0].message.content or ""
         except Exception as e:
             logger.error(f"GROQ API error: {e}")
@@ -99,13 +107,17 @@ Make queries specific and targeted to find high-quality sources."""
             {"role": "user", "content": prompt},
         ]
 
-        response = self._call_api(messages, max_tokens=1000)
+        response = self._call_api(messages, max_tokens=1000, use_json_mode=True)
 
         try:
             result = json.loads(response)
             # Validate structure
             if "queries" not in result or not isinstance(result["queries"], list):
                 raise ValueError("Invalid response structure")
+
+            # Validate not empty
+            if len(result["queries"]) < 1:
+                raise ValueError("No queries generated")
 
             # Limit to 5 queries
             result["queries"] = result["queries"][:5]
