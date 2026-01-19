@@ -1,2 +1,5 @@
 PyYAML
 python-frontmatter
+groq>=1.0.0
+exa-py>=1.0.6
+PyGithub>=2.8.1
