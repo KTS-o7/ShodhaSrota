@@ -2,6 +2,10 @@
 
 A project to document learning and sources.
 
+## AI-Assisted Draft Generation
+
+ShodhaSrota includes an automated system that generates weekly research paper drafts using AI. The system uses a 4-pass pipeline (query generation, search, outline, draft) with Exa for paper discovery and Groq for content generation. Drafts are automatically created as pull requests every Sunday. See [docs/ai-drafts-setup.md](docs/ai-drafts-setup.md) for setup and configuration details.
+
 ## Research
 
 | File | Title | Author | Created On | Tags | Related Links |
