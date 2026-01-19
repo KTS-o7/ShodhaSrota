@@ -51,6 +51,11 @@ def get_default_config() -> dict[str, Any]:
             "general": "scripts/templates/general.md",
             "books": "scripts/templates/books.md",
         },
+        "workflow": {
+            "editor": "code",
+            "auto_update_readme": True,
+            "auto_commit_on_complete": True,
+        },
     }
 
 

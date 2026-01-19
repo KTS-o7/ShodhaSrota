@@ -20,3 +20,7 @@ templates:
   technologies: "scripts/templates/technologies.md"
   general: "scripts/templates/general.md"
   books: "scripts/templates/books.md"
+workflow:
+  editor: "code" # Options: code, vim, nano, subl, etc
+  auto_update_readme: true
+  auto_commit_on_complete: true
