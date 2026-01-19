@@ -4,6 +4,7 @@ Track ideas captured from mobile and their progress through the writing workflow
 
 ## Pending
 <!-- New ideas appear here -->
+- [ ] [P1] [2026-01-19 17:00] Paper: Transformers - Attention Is All You Need - https://arxiv.org/abs/1706.03762
 - [ ] [2026-01-19 11:50] Concept: Testing the Knowledge Capture System End-to-End
 
 ## In Progress
