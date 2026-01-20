@@ -1,0 +1,9 @@
+{
+  "queries": [
+    "(\"transformer architecture\" OR \"attention is all you need\") AND (methodology OR implementation) AND (\"natural language processing\" OR \"deep learning\")",
+    "(\"transformer model\" OR \"self-attention mechanism\") AND (results OR evaluation) AND (\"machine translation\" OR \"sequence-to-sequence\")",
+    "(\"transformer\" OR \"attention-based model\") AND (criticisms OR limitations) AND (\"neural machine translation\" OR \"language modeling\")",
+    "(\"transformer\" OR \"self-attention\") AND (related work OR comparison) AND (\"recurrent neural networks\" OR \"convolutional neural networks\")",
+    "(\"transformer architecture\" OR \"attention mechanism\") AND (analysis OR review) AND (\"academic\" OR \"technical\" OR \"research\")"
+  ]
+}
