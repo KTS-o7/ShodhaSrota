@@ -141,6 +141,13 @@ class DraftPRCreator:
         self._run_git("checkout", "main")
         self._run_git("pull", "origin", "main")
 
+        # Delete local branch if it exists
+        try:
+            self._run_git("branch", "-D", branch_name)
+            logger.info(f"Deleted existing local branch: {branch_name}")
+        except subprocess.CalledProcessError:
+            pass  # Branch doesn't exist locally, that's fine
+
         # Create new branch
         self._run_git("checkout", "-b", branch_name)
 
@@ -160,9 +167,12 @@ class DraftPRCreator:
         return sha
 
     def push_branch(self, branch_name: str) -> None:
-        """Push branch to origin."""
+        """Push branch to origin, overwriting if it exists."""
         logger.info(f"Pushing branch: {branch_name}")
-        self._run_git("push", "-u", "origin", branch_name)
+
+        # Force push to overwrite any existing remote branch from previous runs
+        # This is safe for draft branches since they're regenerated each time
+        self._run_git("push", "-u", "origin", branch_name, "--force")
 
     def create_pull_request(
         self,
@@ -193,7 +203,22 @@ class DraftPRCreator:
         owner, repo_name = match.groups()
         self.repo = self.github_client.get_repo(f"{owner}/{repo_name}")
 
-        # Create PR
+        # Check if PR already exists for this branch
+        existing_prs = self.repo.get_pulls(state="open", head=f"{owner}:{branch_name}")
+        for existing_pr in existing_prs:
+            logger.info(
+                f"PR already exists: #{existing_pr.number} - {existing_pr.html_url}"
+            )
+            logger.info("Updating existing PR description")
+            existing_pr.edit(body=description)
+
+            # Add labels if specified
+            if labels:
+                existing_pr.add_to_labels(*labels)
+
+            return {"number": existing_pr.number, "url": existing_pr.html_url}
+
+        # Create new PR
         pr = self.repo.create_pull(
             title=title, body=description, head=branch_name, base="main"
         )
