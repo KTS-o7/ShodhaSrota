@@ -407,12 +407,20 @@ def main(dry_run: bool = False) -> int:
         # Commit queue update
         pr_creator._run_git("checkout", "main")
         pr_creator._run_git("add", "queue.md")
-        pr_creator._run_git(
-            "commit",
-            "-m",
-            f"chore: move '{queue_item.title}' to in progress (PR #{pr_result['number']})",
-        )
-        pr_creator._run_git("push", "origin", "main")
+
+        # Check if there are changes to commit (might already be updated from previous run)
+        try:
+            pr_creator._run_git("diff", "--cached", "--quiet")
+            logger.info("Queue already up to date, no commit needed")
+        except subprocess.CalledProcessError:
+            # There are changes, commit them
+            pr_creator._run_git(
+                "commit",
+                "-m",
+                f"chore: move '{queue_item.title}' to in progress (PR #{pr_result['number']})",
+            )
+            pr_creator._run_git("push", "origin", "main")
+            logger.info("Queue updated and pushed to main")
 
         logger.info("Queue updated successfully")
 

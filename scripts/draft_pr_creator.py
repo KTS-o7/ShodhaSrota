@@ -159,6 +159,18 @@ class DraftPRCreator:
         for file in files:
             self._run_git("add", str(file))
 
+        # Check if there are changes to commit
+        try:
+            status = self._run_git("diff", "--cached", "--quiet")
+        except subprocess.CalledProcessError:
+            # There are changes (diff returns non-zero)
+            pass
+        else:
+            # No changes staged
+            logger.info("No changes to commit, skipping")
+            sha = self._run_git("rev-parse", "HEAD")
+            return sha
+
         # Commit
         self._run_git("commit", "-m", message)
 
