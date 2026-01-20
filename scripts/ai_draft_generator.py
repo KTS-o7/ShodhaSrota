@@ -239,10 +239,14 @@ def main(dry_run: bool = False) -> int:
     if not groq_api_key:
         logger.error("GROQ_API_KEY not set")
         return 1
+    else:
+        logger.info(f"GROQ_API_KEY found (length: {len(groq_api_key)})")
 
     if not exa_api_key:
         logger.error("EXA_API_KEY not set")
         return 1
+    else:
+        logger.info(f"EXA_API_KEY found (length: {len(exa_api_key)})")
 
     if not github_token and not dry_run:
         logger.error("GITHUB_TOKEN not set")
@@ -264,6 +268,22 @@ def main(dry_run: bool = False) -> int:
         search_type=ai_config["exa"]["search_type"],
         max_characters=ai_config["exa"]["max_characters"],
     )
+
+    # Test API connectivity with a simple call
+    logger.info("Testing GROQ API connectivity...")
+    try:
+        test_result = groq_client.generate_search_queries(
+            title="Test connectivity", category="general", url=""
+        )
+        logger.info(
+            f"GROQ API test successful - generated {len(test_result.get('queries', []))} queries"
+        )
+    except Exception as e:
+        logger.error(f"GROQ API connectivity test failed: {type(e).__name__}: {e}")
+        logger.error(
+            "Please verify your GROQ_API_KEY is valid and the API is accessible"
+        )
+        return 1
 
     # Select queue item
     queue_file = repo_root / "queue.md"

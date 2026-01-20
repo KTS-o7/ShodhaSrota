@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from typing import Any
 
 from groq import Groq
@@ -37,22 +38,51 @@ class GroqClient:
         temperature: float | None = None,
         use_json_mode: bool = False,
     ) -> str:
-        """Make API call to GROQ."""
-        try:
-            kwargs = {
-                "model": self.model,
-                "messages": messages,
-                "temperature": temperature or self.temperature,
-                "max_tokens": max_tokens or self.max_tokens,
-            }
-            if use_json_mode:
-                kwargs["response_format"] = {"type": "json_object"}
+        """Make API call to GROQ with retry logic."""
+        kwargs = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": temperature or self.temperature,
+            "max_tokens": max_tokens or self.max_tokens,
+        }
+        if use_json_mode:
+            kwargs["response_format"] = {"type": "json_object"}
 
-            response = self.client.chat.completions.create(**kwargs)
-            return response.choices[0].message.content or ""
-        except Exception as e:
-            logger.error(f"GROQ API error: {e}")
-            raise
+        # Retry logic with exponential backoff
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"GROQ API call attempt {attempt + 1}/{max_retries}")
+                response = self.client.chat.completions.create(**kwargs)
+                content = response.choices[0].message.content or ""
+                logger.info(
+                    f"GROQ API call successful (response length: {len(content)} chars)"
+                )
+                return content
+            except Exception as e:
+                logger.warning(
+                    f"GROQ API error on attempt {attempt + 1}/{max_retries}: {type(e).__name__}: {e}"
+                )
+
+                # Don't retry on auth errors or bad requests
+                error_str = str(e).lower()
+                if any(
+                    x in error_str
+                    for x in ["auth", "api key", "unauthorized", "forbidden"]
+                ):
+                    logger.error("Authentication error - not retrying")
+                    raise
+
+                if attempt < max_retries - 1:
+                    # Exponential backoff: 2, 4, 8, 16 seconds
+                    sleep_time = 2 ** (attempt + 1)
+                    logger.info(f"Retrying in {sleep_time} seconds...")
+                    time.sleep(sleep_time)
+                else:
+                    logger.error(f"All {max_retries} attempts failed")
+                    raise RuntimeError(
+                        f"GROQ API not reachable after {max_retries} retries: {e}"
+                    ) from e
 
     def generate_search_queries(
         self, title: str, category: str, url: str = ""
