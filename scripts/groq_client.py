@@ -23,7 +23,10 @@ class GroqClient:
         max_tokens: int = 4096,
     ):
         """Initialize GROQ client."""
-        if not api_key or not api_key.strip():
+        # Strip whitespace from API key (common issue when copying from GitHub Secrets)
+        api_key = api_key.strip() if api_key else ""
+
+        if not api_key:
             raise ValueError("GROQ API key cannot be empty")
 
         self.client = Groq(api_key=api_key)
