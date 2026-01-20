@@ -1,5 +1,5 @@
 defaults:
-  author_name: "Your Name"
+  author_name: "Krishnatejaswi S"
   auto_commit: true
   auto_push: false
   timestamp_format: "%Y-%m-%d_%H-%M-%S"
