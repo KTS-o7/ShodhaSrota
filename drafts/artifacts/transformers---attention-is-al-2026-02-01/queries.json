@@ -1,0 +1,9 @@
+{
+  "queries": [
+    "(\"Transformer model\" OR \"Attention Is All You Need\") AND (methodology OR architecture) AND (\"natural language processing\" OR \"sequence-to-sequence\")",
+    "(\"Transformer attention mechanism\" OR \"self-attention\") AND (\"deep learning\" OR \"neural networks\") AND (results OR evaluation)",
+    "(\"Transformer applications\" OR \"sequence-to-sequence tasks\") AND (\"machine translation\" OR \"text generation\" OR \"summarization\") AND (\"case studies\" OR \"examples\")",
+    "(\"Transformer vs\" OR \"Transformer alternative\") AND (\"Recurrent Neural Network\" OR \"Convolutional Neural Network\" OR \"Long Short-Term Memory\") AND (comparison OR evaluation)",
+    "(\"Transformer limitations\" OR \"Transformer criticisms\") AND (\"optimization\" OR \"training\" OR \"interpretability\") AND (analysis OR discussion)"
+  ]
+}
