@@ -1,0 +1,9 @@
+{
+  "queries": [
+    "Transformer architecture attention mechanisms site:arxiv.org OR site:ieee.org",
+    "Sequence-to-sequence models with self-attention methodology",
+    "Comparing recurrent neural networks with transformer models for machine translation",
+    "Criticisms of transformer models in natural language processing applications",
+    "Evaluation of transformer-based approaches for low-resource languages"
+  ]
+}
