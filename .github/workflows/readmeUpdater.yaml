@@ -5,13 +5,20 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   update-readme:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -29,15 +36,24 @@ jobs:
           echo "Updating README..."
           python3 -m scripts.update_readme
 
-      - name: Commit changes
-        run: |
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "github-actions[bot]"
-          git add README.md
-          git diff --staged --quiet || git commit -m "docs: auto-update README with directory tables"
-
-      - name: Push changes
+      - name: Commit README.md (signed, via GitHub API)
+        # Commit through the contents API with GITHUB_TOKEN instead of git push,
+        # so GitHub signs the commit and it passes the required-signatures rule.
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
         run: |
-          git push || echo "No changes to push"
+          if git diff --quiet -- README.md; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          base64 -w0 README.md > "$RUNNER_TEMP/content.b64"
+          jq -n \
+            --arg message "docs: auto-update README with directory tables" \
+            --arg branch "$BRANCH" \
+            --arg sha "$(git rev-parse HEAD:README.md)" \
+            --rawfile content "$RUNNER_TEMP/content.b64" \
+            '{message: $message, branch: $branch, sha: $sha, content: $content}' \
+            > "$RUNNER_TEMP/request.json"
+          gh api -X PUT "repos/$REPO/contents/README.md" --input "$RUNNER_TEMP/request.json" --jq '.commit.html_url'

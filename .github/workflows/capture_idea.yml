@@ -5,15 +5,19 @@ on:
     types: [capture_idea]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   capture:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -32,10 +36,24 @@ jobs:
         run: |
           python3 -m scripts.capture_to_queue "$MESSAGE"
 
-      - name: Commit changes
+      - name: Commit queue.md (signed, via GitHub API)
+        # Commit through the contents API with GITHUB_TOKEN instead of git push,
+        # so GitHub signs the commit and it passes the required-signatures rule.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add queue.md
-          git commit -m "chore: capture idea from mobile" || echo "No changes to commit"
-          git push
+          if git diff --quiet -- queue.md; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          base64 -w0 queue.md > "$RUNNER_TEMP/content.b64"
+          jq -n \
+            --arg message "chore: capture idea from mobile" \
+            --arg branch "$BRANCH" \
+            --arg sha "$(git rev-parse HEAD:queue.md)" \
+            --rawfile content "$RUNNER_TEMP/content.b64" \
+            '{message: $message, branch: $branch, sha: $sha, content: $content}' \
+            > "$RUNNER_TEMP/request.json"
+          gh api -X PUT "repos/$REPO/contents/queue.md" --input "$RUNNER_TEMP/request.json" --jq '.commit.html_url'
